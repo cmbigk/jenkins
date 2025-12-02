@@ -10,18 +10,17 @@ export interface User {
 }
 
 export interface LoginRequest {
-  username: string;
+  email: string;
   password: string;
 }
 
 export interface RegisterRequest {
-  username: string;
   email: string;
   password: string;
+  firstName: string;
+  lastName: string;
   role: 'CLIENT' | 'SELLER';
-  fullName?: string;
   phone?: string;
-  address?: string;
 }
 
 export interface AuthResponse {

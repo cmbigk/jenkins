@@ -14,13 +14,12 @@ import { RegisterRequest } from '../../models/user.model';
 })
 export class RegisterComponent {
   registerData: RegisterRequest = {
-    username: '',
     email: '',
     password: '',
+    firstName: '',
+    lastName: '',
     role: 'CLIENT',
-    fullName: '',
-    phone: '',
-    address: ''
+    phone: ''
   };
   errorMessage = '';
   loading = false;
@@ -31,7 +30,7 @@ export class RegisterComponent {
   ) {}
 
   onSubmit(): void {
-    if (!this.registerData.username || !this.registerData.email || !this.registerData.password) {
+    if (!this.registerData.firstName || !this.registerData.lastName || !this.registerData.email || !this.registerData.password) {
       this.errorMessage = 'Please fill in all required fields';
       return;
     }

@@ -4,14 +4,14 @@
     
     <form (ngSubmit)="onSubmit()" #loginForm="ngForm">
       <div class="form-group">
-        <label for="username">Username</label>
+        <label for="email">Email</label>
         <input
-          type="text"
-          id="username"
-          name="username"
-          [(ngModel)]="loginData.username"
+          type="email"
+          id="email"
+          name="email"
+          [(ngModel)]="loginData.email"
           required
-          placeholder="Enter your username"
+          placeholder="Enter your email"
         />
       </div>
 

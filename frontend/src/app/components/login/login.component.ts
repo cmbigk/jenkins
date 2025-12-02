@@ -14,7 +14,7 @@ import { LoginRequest } from '../../models/user.model';
 })
 export class LoginComponent {
   loginData: LoginRequest = {
-    username: '',
+    email: '',
     password: ''
   };
   errorMessage = '';
@@ -26,7 +26,7 @@ export class LoginComponent {
   ) {}
 
   onSubmit(): void {
-    if (!this.loginData.username || !this.loginData.password) {
+    if (!this.loginData.email || !this.loginData.password) {
       this.errorMessage = 'Please fill in all fields';
       return;
     }
