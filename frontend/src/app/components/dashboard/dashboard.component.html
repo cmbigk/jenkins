@@ -73,6 +73,9 @@
     
     <div class="products-grid" *ngIf="products.length > 0">
       <div class="product-card" *ngFor="let product of products">
+        <div class="product-image" *ngIf="product.imageIds && product.imageIds.length > 0">
+          <img [src]="getProductImage(product)" [alt]="product.name" />
+        </div>
         <div class="product-info">
           <h3>{{ product.name }}</h3>
           <p class="category">{{ product.category }}</p>

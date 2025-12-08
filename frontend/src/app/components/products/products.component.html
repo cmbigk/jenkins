@@ -1,9 +1,6 @@
 <div class="products-container">
   <div class="products-header">
     <h1>All Products</h1>
-    <button *ngIf="authService.isSeller()" (click)="goToDashboard()" class="btn-dashboard">
-      Go to Dashboard
-    </button>
   </div>
 
   <div *ngIf="loading" class="loading">Loading products...</div>
@@ -12,7 +9,7 @@
 
   <div class="products-grid" *ngIf="!loading && products.length > 0">
     <div class="product-card" *ngFor="let product of products">
-      <div class="product-image">
+      <div class="product-image" *ngIf="product.imageIds && product.imageIds.length > 0">
         <img [src]="getProductImage(product)" [alt]="product.name" />
       </div>
       <div class="product-info">

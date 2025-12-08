@@ -53,7 +53,7 @@ export class DashboardComponent implements OnInit {
   loadMyProducts(): void {
     const user = this.authService.getCurrentUser();
     if (user) {
-      this.productService.getProductsBySeller(user.id).subscribe({
+      this.productService.getProductsBySeller(user.email).subscribe({
         next: (products) => {
           this.products = products;
         },
@@ -122,8 +122,14 @@ export class DashboardComponent implements OnInit {
   uploadImage(): void {
     if (!this.selectedFile) return;
 
+    const user = this.authService.getCurrentUser();
+    if (!user) {
+      this.errorMessage = 'User not authenticated';
+      return;
+    }
+
     this.uploadingImage = true;
-    this.mediaService.uploadMedia(this.selectedFile).subscribe({
+    this.mediaService.uploadMedia(this.selectedFile, user.email).subscribe({
       next: (response: MediaResponse) => {
         this.productForm.imageIds = this.productForm.imageIds || [];
         this.productForm.imageIds.push(response.id);
@@ -183,11 +189,21 @@ export class DashboardComponent implements OnInit {
       next: () => {
         this.successMessage = 'Product deleted successfully';
         this.loadMyProducts();
+        setTimeout(() => {
+          this.successMessage = '';
+        }, 3000);
       },
       error: (error) => {
         this.errorMessage = error.error?.message || 'Failed to delete product';
       }
     });
+  }
+
+  getProductImage(product: Product): string {
+    if (product.imageIds && product.imageIds.length > 0) {
+      return this.mediaService.getMediaUrl(product.imageIds[0]);
+    }
+    return 'assets/placeholder.jpg';
   }
 
   logout(): void {

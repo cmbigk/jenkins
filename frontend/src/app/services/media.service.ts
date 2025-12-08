@@ -20,14 +20,15 @@ export class MediaService {
 
   constructor(private http: HttpClient) {}
 
-  uploadMedia(file: File, productId?: string): Observable<MediaResponse> {
+  uploadMedia(file: File, userEmail: string, productId?: string): Observable<MediaResponse> {
     const formData = new FormData();
     formData.append('file', file);
     if (productId) {
       formData.append('productId', productId);
     }
     
-    return this.http.post<MediaResponse>(`${this.apiUrl}/upload`, formData);
+    const headers = { 'X-User-Email': userEmail };
+    return this.http.post<MediaResponse>(`${this.apiUrl}/upload`, formData, { headers });
   }
 
   getMediaUrl(filename: string): string {
