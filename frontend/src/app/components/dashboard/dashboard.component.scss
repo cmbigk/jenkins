@@ -73,11 +73,11 @@
 }
 
 .btn-logout {
-  background: #dc3545;
+  background: #6c757d;
   color: white;
 
   &:hover {
-    background: #c82333;
+    background: #5a6268;
   }
 }
 
@@ -244,22 +244,22 @@
 }
 
 .btn-edit {
-  background: #ffc107;
-  color: #333;
-  flex: 1;
-
-  &:hover {
-    background: #e0a800;
-  }
-}
-
-.btn-delete {
-  background: #dc3545;
+  background: #667eea;
   color: white;
   flex: 1;
 
   &:hover {
-    background: #c82333;
+    background: #5568d3;
+  }
+}
+
+.btn-delete {
+  background: #6c757d;
+  color: white;
+  flex: 1;
+
+  &:hover {
+    background: #5a6268;
   }
 }
 
