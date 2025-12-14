@@ -225,7 +225,8 @@ export class DashboardComponent implements OnInit {
 
   getProductImage(product: Product): string {
     if (product.imageIds && product.imageIds.length > 0) {
-      return this.mediaService.getMediaUrl(product.imageIds[0]);
+      // Display the latest image (last one in the array)
+      return this.mediaService.getMediaUrl(product.imageIds[product.imageIds.length - 1]);
     }
     return 'assets/placeholder.jpg';
   }
