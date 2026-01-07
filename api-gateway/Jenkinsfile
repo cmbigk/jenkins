@@ -1,0 +1,75 @@
+pipeline {
+    agent any
+    
+    tools {
+        maven 'Maven-3.9'
+        jdk 'JDK-21'
+    }
+    
+    environment {
+        SERVICE_NAME = 'api-gateway'
+        DOCKER_IMAGE = "ecommerce/${SERVICE_NAME}"
+        DOCKER_TAG = "${BUILD_NUMBER}"
+    }
+    
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['dev', 'staging', 'production'], description: 'Deployment Environment')
+        booleanParam(name: 'DEPLOY', defaultValue: true, description: 'Deploy after build?')
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo "Checking out ${SERVICE_NAME}..."
+                checkout scm
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                dir('api-gateway') {
+                    sh 'mvn clean package -DskipTests'
+                }
+            }
+        }
+        
+        stage('Docker Build') {
+            steps {
+                dir('api-gateway') {
+                    script {
+                        docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}")
+                        docker.build("${DOCKER_IMAGE}:latest")
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy') {
+            when {
+                expression { params.DEPLOY == true }
+            }
+            steps {
+                script {
+                    sh """
+                        docker stop ${SERVICE_NAME} 2>/dev/null || true
+                        docker rm ${SERVICE_NAME} 2>/dev/null || true
+                        docker run -d \
+                            --name ${SERVICE_NAME} \
+                            --network buy-01_default \
+                            -p 8080:8080 \
+                            ${DOCKER_IMAGE}:${DOCKER_TAG}
+                    """
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            slackSend(color: 'good', message: "✅ ${SERVICE_NAME} #${BUILD_NUMBER} SUCCESS")
+        }
+        failure {
+            slackSend(color: 'danger', message: "❌ ${SERVICE_NAME} #${BUILD_NUMBER} FAILED")
+        }
+    }
+}

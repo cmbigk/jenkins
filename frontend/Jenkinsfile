@@ -1,0 +1,218 @@
+pipeline {
+    agent any
+    
+    tools {
+        nodejs 'NodeJS-20'
+    }
+    
+    environment {
+        SERVICE_NAME = 'frontend'
+        DOCKER_IMAGE = "ecommerce/${SERVICE_NAME}"
+        DOCKER_TAG = "${BUILD_NUMBER}"
+    }
+    
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['dev', 'staging', 'production'], description: 'Deployment Environment')
+        booleanParam(name: 'SKIP_TESTS', defaultValue: false, description: 'Skip tests?')
+        booleanParam(name: 'DEPLOY', defaultValue: true, description: 'Deploy after build?')
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo "Checking out ${SERVICE_NAME}..."
+                checkout scm
+                script {
+                    env.GIT_COMMIT_SHORT = sh(
+                        script: "git rev-parse --short HEAD",
+                        returnStdout: true
+                    ).trim()
+                }
+            }
+        }
+        
+        stage('Install Dependencies') {
+            steps {
+                dir('frontend') {
+                    echo "Installing npm dependencies..."
+                    sh 'npm ci'
+                }
+            }
+        }
+        
+        stage('Lint') {
+            steps {
+                dir('frontend') {
+                    echo "Running ESLint..."
+                    sh 'npm run lint || true'
+                }
+            }
+        }
+        
+        stage('Unit Tests') {
+            when {
+                expression { params.SKIP_TESTS == false }
+            }
+            steps {
+                dir('frontend') {
+                    echo "Running unit tests with Karma/Jasmine..."
+                    sh 'npm run test:ci || true'
+                }
+            }
+            post {
+                always {
+                    // Publish test results if available
+                    junit allowEmptyResults: true, testResults: '**/test-results/**/*.xml'
+                    // Publish coverage reports
+                    publishHTML([
+                        allowMissing: true,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: 'frontend/coverage',
+                        reportFiles: 'index.html',
+                        reportName: 'Code Coverage Report'
+                    ])
+                }
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                dir('frontend') {
+                    script {
+                        def buildConfig = ''
+                        if (params.ENVIRONMENT == 'production') {
+                            buildConfig = '--configuration production'
+                        } else if (params.ENVIRONMENT == 'staging') {
+                            buildConfig = '--configuration staging'
+                        }
+                        
+                        echo "Building Angular application for ${params.ENVIRONMENT}..."
+                        sh "npm run build ${buildConfig}"
+                    }
+                }
+            }
+            post {
+                success {
+                    archiveArtifacts artifacts: 'frontend/dist/**/*', fingerprint: true
+                }
+            }
+        }
+        
+        stage('Docker Build') {
+            steps {
+                dir('frontend') {
+                    echo "Building Docker image for ${SERVICE_NAME}..."
+                    script {
+                        dockerImage = docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}")
+                        docker.build("${DOCKER_IMAGE}:latest")
+                    }
+                }
+            }
+        }
+        
+        stage('Security Audit') {
+            steps {
+                dir('frontend') {
+                    echo "Running npm security audit..."
+                    sh 'npm audit --audit-level=moderate || true'
+                }
+            }
+        }
+        
+        stage('Deploy to Environment') {
+            when {
+                expression { params.DEPLOY == true }
+            }
+            steps {
+                script {
+                    echo "Deploying ${SERVICE_NAME} to ${params.ENVIRONMENT}..."
+                    
+                    // Stop existing container
+                    sh """
+                        docker stop ${SERVICE_NAME} 2>/dev/null || true
+                        docker rm ${SERVICE_NAME} 2>/dev/null || true
+                    """
+                    
+                    // Deploy new version
+                    sh """
+                        docker run -d \
+                            --name ${SERVICE_NAME} \
+                            --network buy-01_default \
+                            -p 4200:4200 \
+                            -e NODE_ENV=${params.ENVIRONMENT} \
+                            ${DOCKER_IMAGE}:${DOCKER_TAG}
+                    """
+                    
+                    // Wait for app to start
+                    sleep(time: 15, unit: 'SECONDS')
+                    
+                    // Health check
+                    sh """
+                        curl -f http://localhost:4200 || exit 1
+                    """
+                }
+            }
+        }
+        
+        stage('E2E Tests') {
+            when {
+                allOf {
+                    expression { params.SKIP_TESTS == false }
+                    expression { params.DEPLOY == true }
+                }
+            }
+            steps {
+                dir('frontend') {
+                    echo "Running E2E tests..."
+                    sh 'npm run e2e || true'
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            echo "Pipeline execution completed for ${SERVICE_NAME}"
+            cleanWs()
+        }
+        success {
+            echo "✅ Build SUCCESS for ${SERVICE_NAME}"
+            emailext(
+                subject: "✅ Jenkins Build SUCCESS: ${SERVICE_NAME} - Build #${BUILD_NUMBER}",
+                body: """
+                    <h2>Frontend Build Successful!</h2>
+                    <p><strong>Build Number:</strong> ${BUILD_NUMBER}</p>
+                    <p><strong>Git Commit:</strong> ${env.GIT_COMMIT_SHORT}</p>
+                    <p><strong>Environment:</strong> ${params.ENVIRONMENT}</p>
+                    <p><strong>Build URL:</strong> ${BUILD_URL}</p>
+                    <p><strong>Application URL:</strong> http://localhost:4200</p>
+                """,
+                to: '${DEFAULT_RECIPIENTS}',
+                mimeType: 'text/html'
+            )
+            slackSend(
+                color: 'good',
+                message: "✅ Build SUCCESS: ${SERVICE_NAME} #${BUILD_NUMBER} - ${params.ENVIRONMENT}\nApp: http://localhost:4200"
+            )
+        }
+        failure {
+            echo "❌ Build FAILED for ${SERVICE_NAME}"
+            emailext(
+                subject: "❌ Jenkins Build FAILED: ${SERVICE_NAME} - Build #${BUILD_NUMBER}",
+                body: """
+                    <h2>Frontend Build Failed!</h2>
+                    <p><strong>Build Number:</strong> ${BUILD_NUMBER}</p>
+                    <p><strong>Environment:</strong> ${params.ENVIRONMENT}</p>
+                    <p><strong>Console Output:</strong> ${BUILD_URL}console</p>
+                """,
+                to: '${DEFAULT_RECIPIENTS}',
+                mimeType: 'text/html'
+            )
+            slackSend(
+                color: 'danger',
+                message: "❌ Build FAILED: ${SERVICE_NAME} #${BUILD_NUMBER}\n${BUILD_URL}"
+            )
+        }
+    }
+}

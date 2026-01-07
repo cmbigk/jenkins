@@ -1,0 +1,92 @@
+jenkins:
+  systemMessage: "E-Commerce Microservices CI/CD Server"
+  numExecutors: 2
+  mode: NORMAL
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          password: "admin123"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+  remotingSecurity:
+    enabled: true
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - usernamePassword:
+              scope: GLOBAL
+              id: "github-credentials"
+              username: "your-github-username"
+              password: "your-github-token"
+              description: "GitHub credentials"
+          - string:
+              scope: GLOBAL
+              id: "slack-token"
+              secret: "your-slack-token"
+              description: "Slack webhook token"
+
+tool:
+  git:
+    installations:
+      - name: "Default"
+        home: "git"
+  maven:
+    installations:
+      - name: "Maven-3.9"
+        properties:
+          - installSource:
+              installers:
+                - maven:
+                    id: "3.9.5"
+  jdk:
+    installations:
+      - name: "JDK-21"
+        properties:
+          - installSource:
+              installers:
+                - jdkInstaller:
+                    id: "jdk-21"
+                    acceptLicense: true
+
+unclassified:
+  location:
+    url: "http://localhost:8090/"
+  mailer:
+    charset: "UTF-8"
+    useSsl: true
+    smtpHost: "smtp.gmail.com"
+    smtpPort: "465"
+    defaultSuffix: "@example.com"
+  slackNotifier:
+    teamDomain: "your-workspace"
+    tokenCredentialId: "slack-token"
+    
+jobs:
+  - script: >
+      folder('ecommerce-microservices') {
+        displayName('E-Commerce Microservices')
+        description('CI/CD pipelines for all microservices')
+      }
+  - script: >
+      multibranchPipelineJob('ecommerce-microservices/user-service-pipeline') {
+        branchSources {
+          git {
+            id('user-service')
+            remote('https://github.com/your-org/ecommerce-platform.git')
+            credentialsId('github-credentials')
+          }
+        }
+        factory {
+          workflowBranchProjectFactory {
+            scriptPath('user-service/Jenkinsfile')
+          }
+        }
+        triggers {
+          periodic(5)
+        }
+      }

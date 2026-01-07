@@ -1,0 +1,142 @@
+pipeline {
+    agent any
+    
+    tools {
+        maven 'Maven-3.9'
+        jdk 'JDK-21'
+    }
+    
+    environment {
+        SERVICE_NAME = 'product-service'
+        DOCKER_IMAGE = "ecommerce/${SERVICE_NAME}"
+        DOCKER_TAG = "${BUILD_NUMBER}"
+    }
+    
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['dev', 'staging', 'production'], description: 'Deployment Environment')
+        booleanParam(name: 'SKIP_TESTS', defaultValue: false, description: 'Skip tests?')
+        booleanParam(name: 'DEPLOY', defaultValue: true, description: 'Deploy after build?')
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo "Checking out ${SERVICE_NAME}..."
+                checkout scm
+                script {
+                    env.GIT_COMMIT_SHORT = sh(
+                        script: "git rev-parse --short HEAD",
+                        returnStdout: true
+                    ).trim()
+                }
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                dir('product-service') {
+                    echo "Building ${SERVICE_NAME}..."
+                    sh 'mvn clean compile'
+                }
+            }
+        }
+        
+        stage('Unit Tests') {
+            when {
+                expression { params.SKIP_TESTS == false }
+            }
+            steps {
+                dir('product-service') {
+                    echo "Running unit tests for ${SERVICE_NAME}..."
+                    sh 'mvn test'
+                }
+            }
+            post {
+                always {
+                    junit '**/target/surefire-reports/*.xml'
+                    jacoco(
+                        execPattern: '**/target/jacoco.exec',
+                        classPattern: '**/target/classes',
+                        sourcePattern: '**/src/main/java'
+                    )
+                }
+            }
+        }
+        
+        stage('Package') {
+            steps {
+                dir('product-service') {
+                    echo "Packaging ${SERVICE_NAME}..."
+                    sh 'mvn package -DskipTests'
+                }
+            }
+            post {
+                success {
+                    archiveArtifacts artifacts: '**/target/*.jar', fingerprint: true
+                }
+            }
+        }
+        
+        stage('Docker Build') {
+            steps {
+                dir('product-service') {
+                    echo "Building Docker image for ${SERVICE_NAME}..."
+                    script {
+                        dockerImage = docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}")
+                        docker.build("${DOCKER_IMAGE}:latest")
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy to Environment') {
+            when {
+                expression { params.DEPLOY == true }
+            }
+            steps {
+                script {
+                    echo "Deploying ${SERVICE_NAME} to ${params.ENVIRONMENT}..."
+                    
+                    sh """
+                        docker stop ${SERVICE_NAME} 2>/dev/null || true
+                        docker rm ${SERVICE_NAME} 2>/dev/null || true
+                    """
+                    
+                    sh """
+                        docker run -d \
+                            --name ${SERVICE_NAME} \
+                            --network buy-01_default \
+                            -p 8082:8082 \
+                            -e SPRING_PROFILES_ACTIVE=${params.ENVIRONMENT} \
+                            ${DOCKER_IMAGE}:${DOCKER_TAG}
+                    """
+                    
+                    sleep(time: 10, unit: 'SECONDS')
+                    sh "curl -f http://localhost:8082/actuator/health || exit 1"
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            emailext(
+                subject: "✅ Jenkins Build SUCCESS: ${SERVICE_NAME} #${BUILD_NUMBER}",
+                body: "Build successful for ${SERVICE_NAME} - ${params.ENVIRONMENT}",
+                to: '${DEFAULT_RECIPIENTS}'
+            )
+            slackSend(color: 'good', message: "✅ ${SERVICE_NAME} #${BUILD_NUMBER} SUCCESS")
+        }
+        failure {
+            emailext(
+                subject: "❌ Jenkins Build FAILED: ${SERVICE_NAME} #${BUILD_NUMBER}",
+                body: "Build failed for ${SERVICE_NAME}",
+                to: '${DEFAULT_RECIPIENTS}'
+            )
+            slackSend(color: 'danger', message: "❌ ${SERVICE_NAME} #${BUILD_NUMBER} FAILED")
+        }
+    }
+}

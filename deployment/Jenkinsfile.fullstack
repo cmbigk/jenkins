@@ -1,0 +1,94 @@
+pipeline {
+    agent any
+    
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['dev', 'staging', 'production'], description: 'Deployment Environment')
+    }
+    
+    stages {
+        stage('Build All Services') {
+            parallel {
+                stage('User Service') {
+                    steps {
+                        build job: 'user-service-pipeline',
+                              parameters: [
+                                  string(name: 'ENVIRONMENT', value: params.ENVIRONMENT),
+                                  booleanParam(name: 'DEPLOY', value: true)
+                              ]
+                    }
+                }
+                stage('Product Service') {
+                    steps {
+                        build job: 'product-service-pipeline',
+                              parameters: [
+                                  string(name: 'ENVIRONMENT', value: params.ENVIRONMENT),
+                                  booleanParam(name: 'DEPLOY', value: true)
+                              ]
+                    }
+                }
+                stage('Media Service') {
+                    steps {
+                        build job: 'media-service-pipeline',
+                              parameters: [
+                                  string(name: 'ENVIRONMENT', value: params.ENVIRONMENT),
+                                  booleanParam(name: 'DEPLOY', value: true)
+                              ]
+                    }
+                }
+                stage('API Gateway') {
+                    steps {
+                        build job: 'api-gateway-pipeline',
+                              parameters: [
+                                  string(name: 'ENVIRONMENT', value: params.ENVIRONMENT),
+                                  booleanParam(name: 'DEPLOY', value: true)
+                              ]
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy Frontend') {
+            steps {
+                build job: 'frontend-pipeline',
+                      parameters: [
+                          string(name: 'ENVIRONMENT', value: params.ENVIRONMENT),
+                          booleanParam(name: 'DEPLOY', value: true)
+                      ]
+            }
+        }
+        
+        stage('System Integration Tests') {
+            steps {
+                echo "Running system-wide integration tests..."
+                sh '''
+                    # Wait for all services to be ready
+                    sleep 30
+                    
+                    # Test service connectivity
+                    curl -f http://localhost:8080/actuator/health || exit 1
+                    curl -f http://localhost:8081/actuator/health || exit 1
+                    curl -f http://localhost:8082/actuator/health || exit 1
+                    curl -f http://localhost:8083/actuator/health || exit 1
+                    curl -f http://localhost:4200 || exit 1
+                    
+                    echo "All services are healthy!"
+                '''
+            }
+        }
+    }
+    
+    post {
+        success {
+            slackSend(
+                color: 'good',
+                message: "✅ Full Stack Deployment SUCCESS to ${params.ENVIRONMENT}\nAll microservices deployed successfully!"
+            )
+        }
+        failure {
+            slackSend(
+                color: 'danger',
+                message: "❌ Full Stack Deployment FAILED to ${params.ENVIRONMENT}"
+            )
+        }
+    }
+}

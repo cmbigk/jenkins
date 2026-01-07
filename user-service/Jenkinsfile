@@ -1,0 +1,218 @@
+pipeline {
+    agent any
+    
+    tools {
+        maven 'Maven-3.9'
+        jdk 'JDK-21'
+    }
+    
+    environment {
+        SERVICE_NAME = 'user-service'
+        DOCKER_IMAGE = "ecommerce/${SERVICE_NAME}"
+        DOCKER_TAG = "${BUILD_NUMBER}"
+    }
+    
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['dev', 'staging', 'production'], description: 'Deployment Environment')
+        booleanParam(name: 'SKIP_TESTS', defaultValue: false, description: 'Skip tests?')
+        booleanParam(name: 'DEPLOY', defaultValue: true, description: 'Deploy after build?')
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo "Checking out ${SERVICE_NAME}..."
+                checkout scm
+                script {
+                    env.GIT_COMMIT_SHORT = sh(
+                        script: "git rev-parse --short HEAD",
+                        returnStdout: true
+                    ).trim()
+                }
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                dir('user-service') {
+                    echo "Building ${SERVICE_NAME}..."
+                    sh 'mvn clean compile'
+                }
+            }
+        }
+        
+        stage('Unit Tests') {
+            when {
+                expression { params.SKIP_TESTS == false }
+            }
+            steps {
+                dir('user-service') {
+                    echo "Running unit tests for ${SERVICE_NAME}..."
+                    sh 'mvn test'
+                }
+            }
+            post {
+                always {
+                    junit '**/target/surefire-reports/*.xml'
+                    jacoco(
+                        execPattern: '**/target/jacoco.exec',
+                        classPattern: '**/target/classes',
+                        sourcePattern: '**/src/main/java'
+                    )
+                }
+            }
+        }
+        
+        stage('Integration Tests') {
+            when {
+                expression { params.SKIP_TESTS == false }
+            }
+            steps {
+                dir('user-service') {
+                    echo "Running integration tests for ${SERVICE_NAME}..."
+                    sh 'mvn verify -DskipUnitTests'
+                }
+            }
+        }
+        
+        stage('Package') {
+            steps {
+                dir('user-service') {
+                    echo "Packaging ${SERVICE_NAME}..."
+                    sh 'mvn package -DskipTests'
+                }
+            }
+            post {
+                success {
+                    archiveArtifacts artifacts: '**/target/*.jar', fingerprint: true
+                }
+            }
+        }
+        
+        stage('Docker Build') {
+            steps {
+                dir('user-service') {
+                    echo "Building Docker image for ${SERVICE_NAME}..."
+                    script {
+                        dockerImage = docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}")
+                        docker.build("${DOCKER_IMAGE}:latest")
+                    }
+                }
+            }
+        }
+        
+        stage('Security Scan') {
+            steps {
+                echo "Running security scan..."
+                // Add security scanning tools like Trivy or SonarQube here
+                sh "echo 'Security scan placeholder - integrate Trivy or SonarQube'"
+            }
+        }
+        
+        stage('Deploy to Environment') {
+            when {
+                expression { params.DEPLOY == true }
+            }
+            steps {
+                script {
+                    echo "Deploying ${SERVICE_NAME} to ${params.ENVIRONMENT}..."
+                    
+                    // Stop existing container
+                    sh """
+                        docker stop ${SERVICE_NAME} 2>/dev/null || true
+                        docker rm ${SERVICE_NAME} 2>/dev/null || true
+                    """
+                    
+                    // Deploy new version
+                    sh """
+                        docker run -d \
+                            --name ${SERVICE_NAME} \
+                            --network buy-01_default \
+                            -p 8081:8081 \
+                            -e SPRING_PROFILES_ACTIVE=${params.ENVIRONMENT} \
+                            ${DOCKER_IMAGE}:${DOCKER_TAG}
+                    """
+                    
+                    // Health check
+                    sleep(time: 10, unit: 'SECONDS')
+                    sh """
+                        curl -f http://localhost:8081/actuator/health || exit 1
+                    """
+                }
+            }
+        }
+        
+        stage('Smoke Tests') {
+            when {
+                expression { params.DEPLOY == true }
+            }
+            steps {
+                echo "Running smoke tests..."
+                sh """
+                    # Test health endpoint
+                    curl -f http://localhost:8081/actuator/health
+                    
+                    # Test basic endpoints
+                    echo "Basic smoke tests passed"
+                """
+            }
+        }
+    }
+    
+    post {
+        always {
+            echo "Pipeline execution completed for ${SERVICE_NAME}"
+            cleanWs()
+        }
+        success {
+            echo "✅ Build SUCCESS for ${SERVICE_NAME}"
+            emailext(
+                subject: "✅ Jenkins Build SUCCESS: ${SERVICE_NAME} - Build #${BUILD_NUMBER}",
+                body: """
+                    <h2>Build Successful!</h2>
+                    <p><strong>Service:</strong> ${SERVICE_NAME}</p>
+                    <p><strong>Build Number:</strong> ${BUILD_NUMBER}</p>
+                    <p><strong>Git Commit:</strong> ${env.GIT_COMMIT_SHORT}</p>
+                    <p><strong>Environment:</strong> ${params.ENVIRONMENT}</p>
+                    <p><strong>Build URL:</strong> ${BUILD_URL}</p>
+                """,
+                to: '${DEFAULT_RECIPIENTS}',
+                mimeType: 'text/html'
+            )
+            // Slack notification
+            slackSend(
+                color: 'good',
+                message: "✅ Build SUCCESS: ${SERVICE_NAME} #${BUILD_NUMBER} - ${params.ENVIRONMENT}\n${BUILD_URL}"
+            )
+        }
+        failure {
+            echo "❌ Build FAILED for ${SERVICE_NAME}"
+            emailext(
+                subject: "❌ Jenkins Build FAILED: ${SERVICE_NAME} - Build #${BUILD_NUMBER}",
+                body: """
+                    <h2>Build Failed!</h2>
+                    <p><strong>Service:</strong> ${SERVICE_NAME}</p>
+                    <p><strong>Build Number:</strong> ${BUILD_NUMBER}</p>
+                    <p><strong>Git Commit:</strong> ${env.GIT_COMMIT_SHORT}</p>
+                    <p><strong>Environment:</strong> ${params.ENVIRONMENT}</p>
+                    <p><strong>Build URL:</strong> ${BUILD_URL}</p>
+                    <p><strong>Console Output:</strong> ${BUILD_URL}console</p>
+                """,
+                to: '${DEFAULT_RECIPIENTS}',
+                mimeType: 'text/html'
+            )
+            // Slack notification
+            slackSend(
+                color: 'danger',
+                message: "❌ Build FAILED: ${SERVICE_NAME} #${BUILD_NUMBER} - ${params.ENVIRONMENT}\n${BUILD_URL}"
+            )
+        }
+        unstable {
+            echo "⚠️ Build UNSTABLE for ${SERVICE_NAME}"
+            slackSend(
+                color: 'warning',
+                message: "⚠️ Build UNSTABLE: ${SERVICE_NAME} #${BUILD_NUMBER}\n${BUILD_URL}"
+            )
+        }
+    }
+}

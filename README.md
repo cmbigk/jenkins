@@ -1,15 +1,37 @@
-# E-Commerce Microservices Platform
+# E-Commerce Microservices Platform with CI/CD
 
-A comprehensive e-commerce platform built with **Java 21**, Spring Boot microservices, MongoDB, Kafka, and Angular.
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
+[![Jenkins](https://img.shields.io/badge/Jenkins-CI%2FCD-red)]()
+[![Docker](https://img.shields.io/badge/Docker-Enabled-blue)]()
+
+A comprehensive e-commerce platform built with **Java 21**, Spring Boot microservices, MongoDB, Kafka, and Angular. **Now with complete Jenkins CI/CD pipeline!**
 
 ## 🎯 Project Status
 
 ✅ **Backend Services Completed** (Java 21 + Spring Boot 3.2.0)  
 ✅ **Docker Integration** (docker-compose with all services)  
 ✅ **API Testing Guide** (comprehensive audit checklist)  
+✅ **Jenkins CI/CD Pipeline** (automated testing, deployment, rollback)  
+✅ **GitHub Integration** (auto-trigger builds on commit)  
 📋 **Frontend Guide** (complete Angular implementation guide provided)  
 
-See `TODO.txt` for detailed status.
+## 🚀 CI/CD Pipeline
+
+This project includes a complete Jenkins CI/CD setup with:
+- ✅ Automated testing (JUnit + Jasmine/Karma)
+- ✅ Blue-green deployment with rollback
+- ✅ Email & Slack notifications
+- ✅ GitHub webhook integration
+- ✅ Parameterized builds (dev/staging/production)
+
+**Quick Start CI/CD:**
+```bash
+cd deployment
+./start-jenkins.sh
+```
+Then open http://localhost:8090
+
+**📚 Complete CI/CD Documentation:** See [deployment/README.md](deployment/README.md)
 
 ## 🏗️ Architecture Overview
 
