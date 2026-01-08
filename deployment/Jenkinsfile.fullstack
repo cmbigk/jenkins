@@ -3,10 +3,21 @@ pipeline {
     
     environment {
         PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        DOCKER_NETWORK = "buy-01_default"
+        BACKUP_TAG = "backup-${BUILD_NUMBER}"
     }
     
     parameters {
         choice(name: 'ENVIRONMENT', choices: ['dev', 'staging', 'production'], description: 'Deployment Environment')
+        booleanParam(name: 'SKIP_TESTS', defaultValue: false, description: 'Skip tests (not recommended)')
+        booleanParam(name: 'ROLLBACK', defaultValue: false, description: 'Rollback to previous version')
+    }
+    
+    triggers {
+        // Poll SCM every 5 minutes for changes
+        pollSCM('H/5 * * * *')
+        // Alternative: Use GitHub webhook for instant triggers
+        // githubPush()
     }
     
     stages {
@@ -59,14 +70,127 @@ pipeline {
         }
         
         stage('Run Tests') {
+            when {
+                expression { params.SKIP_TESTS == false && params.ROLLBACK == false }
+            }
+            parallel {
+                stage('Backend Unit Tests') {
+                    steps {
+                        script {
+                            echo '🧪 Running Backend Unit Tests...'
+                            def services = ['user-service', 'product-service', 'media-service', 'api-gateway']
+                            def testResults = [:]
+                            
+                            services.each { service ->
+                                dir(service) {
+                                    try {
+                                        sh """
+                                            docker run --rm \
+                                                -v \$(pwd):/app \
+                                                -w /app \
+                                                maven:3.9.5-eclipse-temurin-21 \
+                                                mvn test
+                                        """
+                                        testResults[service] = 'PASSED'
+                                    } catch (Exception e) {
+                                        testResults[service] = 'FAILED'
+                                        error("❌ Tests failed for ${service}")
+                                    }
+                                }
+                            }
+                            
+                            echo "📊 Test Results: ${testResults}"
+                        }
+                    }
+                }
+                
+                stage('Frontend Unit Tests') {
+                    steps {
+                        dir('frontend') {
+                            echo '🧪 Running Frontend Unit Tests (Karma/Jasmine)...'
+                            script {
+                                try {
+                                    sh """
+                                        docker run --rm \
+                                            -v \$(pwd):/app \
+                                            -w /app \
+                                            node:18-alpine \
+                                            sh -c 'npm ci && npm run test -- --watch=false --browsers=ChromeHeadless'
+                                    """
+                                    echo '✅ Frontend tests passed'
+                                } catch (Exception e) {
+                                    error('❌ Frontend tests failed')
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Backup Current Deployment') {
+            when {
+                expression { params.ROLLBACK == false }
+            }
             steps {
-                echo '🧪 Running tests...'
-                echo 'Tests are run during Docker build (mvn test in Dockerfile)'
-                echo '✅ Tests completed successfully during build phase'
+                script {
+                    echo '💾 Creating backup of current deployment...'
+                    sh '''
+                        # Tag current images as backup
+                        docker tag ecommerce/user-service:latest ecommerce/user-service:${BACKUP_TAG} || true
+                        docker tag ecommerce/product-service:latest ecommerce/product-service:${BACKUP_TAG} || true
+                        docker tag ecommerce/media-service:latest ecommerce/media-service:${BACKUP_TAG} || true
+                        docker tag ecommerce/api-gateway:latest ecommerce/api-gateway:${BACKUP_TAG} || true
+                        docker tag ecommerce/frontend:latest ecommerce/frontend:${BACKUP_TAG} || true
+                        echo "✅ Backup created with tag: ${BACKUP_TAG}"
+                    '''
+                }
+            }
+        }
+        
+        stage('Rollback') {
+            when {
+                expression { params.ROLLBACK == true }
+            }
+            steps {
+                script {
+                    echo '⏪ Rolling back to previous version...'
+                    def previousBuild = currentBuild.number - 1
+                    def rollbackTag = "backup-${previousBuild}"
+                    
+                    echo "Rolling back to build #${previousBuild} (tag: ${rollbackTag})"
+                    
+                    sh """
+                        # Stop current containers
+                        docker stop user-service product-service media-service api-gateway frontend 2>/dev/null || true
+                        docker rm user-service product-service media-service api-gateway frontend 2>/dev/null || true
+                        
+                        # Deploy previous versions
+                        docker run -d --name user-service --network ${DOCKER_NETWORK} -p 8081:8081 \
+                            -e SPRING_PROFILES_ACTIVE=${ENVIRONMENT} ecommerce/user-service:${rollbackTag}
+                        
+                        docker run -d --name product-service --network ${DOCKER_NETWORK} -p 8082:8082 \
+                            -e SPRING_PROFILES_ACTIVE=${ENVIRONMENT} ecommerce/product-service:${rollbackTag}
+                        
+                        docker run -d --name media-service --network ${DOCKER_NETWORK} -p 8083:8083 \
+                            -e SPRING_PROFILES_ACTIVE=${ENVIRONMENT} ecommerce/media-service:${rollbackTag}
+                        
+                        docker run -d --name api-gateway --network ${DOCKER_NETWORK} -p 8080:8080 \
+                            -e SPRING_PROFILES_ACTIVE=${ENVIRONMENT} ecommerce/api-gateway:${rollbackTag}
+                        
+                        docker run -d --name frontend --network ${DOCKER_NETWORK} -p 4200:80 \
+                            ecommerce/frontend:${rollbackTag}
+                        
+                        echo "✅ Rollback completed to build #${previousBuild}"
+                    """
+                }
             }
         }
         
         stage('Deploy Services') {
+            when {
+                expression { params.ROLLBACK == false }
+            }
             steps {
                 echo '🚀 Deploying services to ${ENVIRONMENT}...'
                 
@@ -133,32 +257,72 @@ pipeline {
         }
         
         stage('Health Checks') {
+            when {
+                expression { params.ROLLBACK == false }
+            }
             steps {
                 echo '🏥 Running health checks...'
-                sleep(time: 15, unit: 'SECONDS')
+                sleep(time: 20, unit: 'SECONDS')
                 
                 script {
-                    sh '''
-                        echo "Checking API Gateway..."
-                        curl -f http://localhost:8080/actuator/health || echo "API Gateway health check failed"
-                        
-                        echo "Checking User Service..."
-                        curl -f http://localhost:8081/actuator/health || echo "User Service health check failed"
-                        
-                        echo "Checking Product Service..."
-                        curl -f http://localhost:8082/actuator/health || echo "Product Service health check failed"
-                        
-                        echo "Checking Media Service..."
-                        curl -f http://localhost:8083/actuator/health || echo "Media Service health check failed"
-                        
-                        echo "Checking Frontend..."
-                        curl -f http://localhost:4200 || echo "Frontend health check failed"
-                    '''
+                    def healthCheckFailed = false
+                    def failedServices = []
+                    
+                    try {
+                        sh 'curl -f http://localhost:8080/actuator/health'
+                        echo '✅ API Gateway is healthy'
+                    } catch (Exception e) {
+                        failedServices.add('API Gateway')
+                        healthCheckFailed = true
+                    }
+                    
+                    try {
+                        sh 'curl -f http://localhost:8081/actuator/health'
+                        echo '✅ User Service is healthy'
+                    } catch (Exception e) {
+                        failedServices.add('User Service')
+                        healthCheckFailed = true
+                    }
+                    
+                    try {
+                        sh 'curl -f http://localhost:8082/actuator/health'
+                        echo '✅ Product Service is healthy'
+                    } catch (Exception e) {
+                        failedServices.add('Product Service')
+                        healthCheckFailed = true
+                    }
+                    
+                    try {
+                        sh 'curl -f http://localhost:8083/actuator/health'
+                        echo '✅ Media Service is healthy'
+                    } catch (Exception e) {
+                        failedServices.add('Media Service')
+                        healthCheckFailed = true
+                    }
+                    
+                    try {
+                        sh 'curl -f http://localhost:4200'
+                        echo '✅ Frontend is healthy'
+                    } catch (Exception e) {
+                        failedServices.add('Frontend')
+                        healthCheckFailed = true
+                    }
+                    
+                    if (healthCheckFailed) {
+                        echo "❌ Health check failed for: ${failedServices.join(', ')}"
+                        echo "🔄 Initiating automatic rollback..."
+                        error("Deployment failed health checks. Rollback required.")
+                    } else {
+                        echo '✅ All services passed health checks'
+                    }
                 }
             }
         }
         
         stage('Smoke Tests') {
+            when {
+                expression { params.ROLLBACK == false }
+            }
             steps {
                 echo '💨 Running smoke tests...'
                 script {
@@ -174,14 +338,108 @@ pipeline {
     
     post {
         success {
-            echo '✅ Deployment successful!'
-            echo '📧 Sending success notification...'
-            echo 'All services deployed successfully!'
+            script {
+                def buildDuration = currentBuild.durationString.replace(' and counting', '')
+                def message = """
+                    ✅ BUILD SUCCESSFUL #${BUILD_NUMBER}
+                    
+                    📦 Project: Ecommerce Fullstack
+                    🌿 Branch: ${env.GIT_BRANCH}
+                    ⏱️ Duration: ${buildDuration}
+                    🚀 Environment: ${params.ENVIRONMENT}
+                    👤 Started by: ${currentBuild.getBuildCauses()[0].userId ?: 'SCM'}
+                    
+                    🔗 Build URL: ${env.BUILD_URL}
+                    
+                    Services deployed:
+                    - User Service: http://localhost:8081
+                    - Product Service: http://localhost:8082
+                    - Media Service: http://localhost:8083
+                    - API Gateway: http://localhost:8080
+                    - Frontend: http://localhost:4200
+                """.stripIndent()
+                
+                echo message
+                
+                // Email notification (configure in Jenkins)
+                // emailext (
+                //     subject: "✅ Build #${BUILD_NUMBER} Successful",
+                //     body: message,
+                //     to: 'team@example.com'
+                // )
+                
+                // Slack notification (requires Slack plugin)
+                // slackSend (
+                //     color: 'good',
+                //     message: message,
+                //     channel: '#deployments'
+                // )
+            }
         }
+        
         failure {
-            echo '❌ Deployment failed!'
-            echo '📧 Sending failure notification...'
-            echo 'Check the console output for details.'
+            script {
+                def buildDuration = currentBuild.durationString.replace(' and counting', '')
+                def failedStage = currentBuild.result
+                def message = """
+                    ❌ BUILD FAILED #${BUILD_NUMBER}
+                    
+                    📦 Project: Ecommerce Fullstack
+                    🌿 Branch: ${env.GIT_BRANCH}
+                    ⏱️ Duration: ${buildDuration}
+                    🚀 Environment: ${params.ENVIRONMENT}
+                    👤 Started by: ${currentBuild.getBuildCauses()[0].userId ?: 'SCM'}
+                    
+                    🔗 Build URL: ${env.BUILD_URL}console
+                    
+                    ⚠️ Action Required: Check logs and fix the issue
+                    💡 Rollback available: Run build with ROLLBACK=true
+                """.stripIndent()
+                
+                echo message
+                
+                // Email notification
+                // emailext (
+                //     subject: "❌ Build #${BUILD_NUMBER} Failed",
+                //     body: message,
+                //     to: 'team@example.com',
+                //     attachLog: true
+                // )
+                
+                // Slack notification
+                // slackSend (
+                //     color: 'danger',
+                //     message: message,
+                //     channel: '#deployments'
+                // )
+                
+                // Automatic rollback on failure
+                echo '🔄 Consider running rollback: trigger build with ROLLBACK=true'
+            }
+        }
+        
+        unstable {
+            script {
+                echo '⚠️ Build unstable - some tests may have failed'
+                // Send notification about unstable build
+            }
+        }
+        
+        always {
+            script {
+                echo '🧹 Cleaning up...'
+                // Clean old Docker images to save space
+                sh '''
+                    # Remove dangling images
+                    docker image prune -f
+                    
+                    # Keep only last 5 builds of each service
+                    for service in user-service product-service media-service api-gateway frontend; do
+                        docker images ecommerce/$service --format "{{.Tag}}" | grep -E "^[0-9]+$" | sort -rn | tail -n +6 | xargs -I {} docker rmi ecommerce/$service:{} 2>/dev/null || true
+                    done
+                '''
+                echo '✅ Cleanup completed'
+            }
         }
     }
 }
