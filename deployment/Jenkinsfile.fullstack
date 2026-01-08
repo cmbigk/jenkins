@@ -214,7 +214,7 @@ pipeline {
                     def failedServices = []
                     
                     try {
-                        sh 'curl -f http://localhost:8080/actuator/health'
+                        sh 'docker exec jenkins-ci curl -f http://api-gateway:8080/actuator/health'
                         echo '✅ API Gateway is healthy'
                     } catch (Exception e) {
                         failedServices.add('API Gateway')
@@ -222,7 +222,7 @@ pipeline {
                     }
                     
                     try {
-                        sh 'curl -f http://localhost:8081/actuator/health'
+                        sh 'docker exec jenkins-ci curl -f http://user-service:8081/actuator/health'
                         echo '✅ User Service is healthy'
                     } catch (Exception e) {
                         failedServices.add('User Service')
@@ -230,7 +230,7 @@ pipeline {
                     }
                     
                     try {
-                        sh 'curl -f http://localhost:8082/actuator/health'
+                        sh 'docker exec jenkins-ci curl -f http://product-service:8082/actuator/health'
                         echo '✅ Product Service is healthy'
                     } catch (Exception e) {
                         failedServices.add('Product Service')
@@ -238,7 +238,7 @@ pipeline {
                     }
                     
                     try {
-                        sh 'curl -f http://localhost:8083/actuator/health'
+                        sh 'docker exec jenkins-ci curl -f http://media-service:8083/actuator/health'
                         echo '✅ Media Service is healthy'
                     } catch (Exception e) {
                         failedServices.add('Media Service')
@@ -246,7 +246,7 @@ pipeline {
                     }
                     
                     try {
-                        sh 'curl -f http://localhost:4200'
+                        sh 'docker exec jenkins-ci curl -f http://frontend:80'
                         echo '✅ Frontend is healthy'
                     } catch (Exception e) {
                         failedServices.add('Frontend')
