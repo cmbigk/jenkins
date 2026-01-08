@@ -15,7 +15,7 @@ pipeline {
     
     triggers {
         // Poll SCM every 5 minutes for changes
-        pollSCM('H/5 * * * *')
+        pollSCM('H/2 * * * *')
         // Alternative: Use GitHub webhook for instant triggers
         // githubPush()
     }
