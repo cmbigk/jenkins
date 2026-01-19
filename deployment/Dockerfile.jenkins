@@ -29,7 +29,8 @@ RUN jenkins-plugin-cli --plugins \
     blueocean:latest \
     credentials:latest \
     credentials-binding:latest \
-    nodejs:latest
+    nodejs:latest \
+    junit:latest
 
 # Skip initial setup wizard
 ENV JAVA_OPTS="-Djenkins.install.runSetupWizard=false"
