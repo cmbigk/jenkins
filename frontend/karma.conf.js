@@ -43,7 +43,7 @@ module.exports = function(config) {
     restartOnFileChange: true,
     customLaunchers: {
       ChromeHeadlessCI: {
-        base: 'ChromiumHeadless',
+        base: 'ChromeHeadless',
         flags: [
           '--no-sandbox',
           '--disable-gpu',
