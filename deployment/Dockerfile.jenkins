@@ -2,7 +2,7 @@ FROM jenkins/jenkins:lts-jdk21
 
 USER root
 
-# Install basic tools and Docker CLI
+# Install basic tools, Docker CLI, and Chromium for frontend testing
 RUN apt-get update && apt-get install -y \
     git \
     curl \
@@ -11,7 +11,19 @@ RUN apt-get update && apt-get install -y \
     jq \
     maven \
     docker.io \
+    chromium \
+    chromium-driver \
+    libgconf-2-4 \
+    libnss3 \
+    libxss1 \
+    libasound2 \
+    fonts-liberation \
+    libappindicator3-1 \
+    xdg-utils \
     && rm -rf /var/lib/apt/lists/*
+
+# Set environment variable for Chromium
+ENV CHROME_BIN=/usr/bin/chromium
 
 # Install Node.js 20
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \

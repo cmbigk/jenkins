@@ -43,26 +43,14 @@ module.exports = function(config) {
     restartOnFileChange: true,
     customLaunchers: {
       ChromeHeadlessCI: {
-        base: 'ChromeHeadless',
-        flags: [
-          '--no-sandbox',
-          '--disable-gpu',
-          '--disable-dev-shm-usage',
-          '--disable-software-rasterizer',
-          '--disable-extensions'
-        ]
-      }
-    },
-    // Use Chromium if Chrome not available
-    customLaunchers: {
-      ChromeHeadlessCI: {
         base: 'ChromiumHeadless',
         flags: [
           '--no-sandbox',
           '--disable-gpu',
           '--disable-dev-shm-usage',
           '--disable-software-rasterizer',
-          '--disable-extensions'
+          '--disable-extensions',
+          '--disable-setuid-sandbox'
         ]
       }
     }
