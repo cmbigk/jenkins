@@ -87,7 +87,7 @@ stage('Rollback') {
         // Deploy previous build version
         def previousBuild = currentBuild.number - 1
         def rollbackTag = "backup-${previousBuild}"
-        // ... rollback execution
+        // ... rollback executi
     }
 }
 ```
