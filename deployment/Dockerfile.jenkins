@@ -2,7 +2,7 @@ FROM jenkins/jenkins:lts-jdk21
 
 USER root
 
-# Install basic tools
+# Install basic tools and Docker CLI
 RUN apt-get update && apt-get install -y \
     git \
     curl \
@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y \
     vim \
     jq \
     maven \
+    docker.io \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js 20
