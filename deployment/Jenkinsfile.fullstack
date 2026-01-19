@@ -131,6 +131,9 @@ pipeline {
             }
         }
         
+        // Frontend Tests - Commented out pending Chrome/Chromium installation
+        // Uncomment after installing Chrome in Jenkins container
+        /*
         stage('Frontend Tests') {
             when {
                 expression { params.SKIP_TESTS == false && params.ROLLBACK == false }
@@ -156,6 +159,7 @@ pipeline {
                 }
             }
         }
+        */
         
         stage('Backup Current Deployment') {
             when {

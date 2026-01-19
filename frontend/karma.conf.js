@@ -47,7 +47,22 @@ module.exports = function(config) {
         flags: [
           '--no-sandbox',
           '--disable-gpu',
-          '--disable-dev-shm-usage'
+          '--disable-dev-shm-usage',
+          '--disable-software-rasterizer',
+          '--disable-extensions'
+        ]
+      }
+    },
+    // Use Chromium if Chrome not available
+    customLaunchers: {
+      ChromeHeadlessCI: {
+        base: 'ChromiumHeadless',
+        flags: [
+          '--no-sandbox',
+          '--disable-gpu',
+          '--disable-dev-shm-usage',
+          '--disable-software-rasterizer',
+          '--disable-extensions'
         ]
       }
     }
