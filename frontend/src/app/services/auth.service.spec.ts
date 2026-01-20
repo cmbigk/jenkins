@@ -213,4 +213,4 @@ describe('AuthService - Real Tests', () => {
     // Assert
     expect(newService.getCurrentUser()).toEqual(mockUser);
   });
-}
+})
