@@ -169,7 +169,6 @@ Build #59: Triggered by "GitHub push by cmbigk"
 - API Gateway (port 8080)
 - Frontend (port 4200)
 - MongoDB (port 27017)
-- PostgreSQL (port 5432)
 
 ### 5.2 Rollback Strategy
 **Status**: ✅ **IMPLEMENTED & AUTOMATED**
