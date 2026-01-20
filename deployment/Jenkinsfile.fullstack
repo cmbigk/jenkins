@@ -7,9 +7,8 @@ pipeline {
         BACKUP_TAG = "backup-${BUILD_NUMBER}"
         
         // Email/Slack notification settings (configure in Jenkins Global Settings)
-        BUILD_NOTIFICATION_EMAIL = "${env.BUILD_NOTIFICATION_EMAIL ?: ''}"
-        SLACK_CHANNEL = "${env.SLACK_CHANNEL ?: '#deployments'}"
-        SLACK_TEAM = "${env.SLACK_TEAM ?: ''}"
+        SLACK_CHANNEL = "${env.SLACK_CHANNEL ?: '#all-cicd-pipeline'}"
+        SLACK_TEAM = "${env.SLACK_TEAM ?: 'CI/CD pipeline'}"
         
         // Credentials (use Jenkins Credentials Store)
         // Example: GITHUB_CREDS = credentials('github-credentials')
