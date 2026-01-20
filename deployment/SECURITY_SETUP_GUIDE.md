@@ -101,7 +101,7 @@ environment {
 }
 
 steps {
-    // Use credentials in commands:
+    // Use credentials in commands
     sh '''
         git config credential.helper store
         echo "https://${GITHUB_CREDS_USR}:${GITHUB_CREDS_PSW}@github.com" > ~/.git-credentials
