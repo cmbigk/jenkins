@@ -344,7 +344,7 @@ pipeline {
                     }
                     
                     try {
-                        sh 'docker exec jenkins-ci curl -f http://frontend:80'
+                        sh 'docker exec jenkins-ci curl -f http://frontend:4200'
                         echo '✅ Frontend is healthy'
                     } catch (Exception e) {
                         failedServices.add('Frontend')
