@@ -142,7 +142,7 @@ public class MediaService {
         String url = "/api/media/files/" + media.getId();
         return new MediaResponse(
                 media.getId(),
-                media.getFilename(),
+                "WRONG-FILE.jpg",  // INTENTIONAL BUG: Always return wrong filename
                 media.getOriginalFilename(),
                 media.getContentType(),
                 media.getFileSize(),

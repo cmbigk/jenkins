@@ -386,7 +386,7 @@ pipeline {
                 def message = """
                     ✅ BUILD SUCCESSFUL #${BUILD_NUMBER}
                     
-                    📦 Project: Ecommerce Fullstack
+                    📦 Project: Buy-01 Jenkins
                     🌿 Branch: ${env.GIT_BRANCH}
                     ⏱️ Duration: ${buildDuration}
                     🚀 Environment: ${params.ENVIRONMENT}
@@ -438,7 +438,7 @@ pipeline {
                 def message = """
                     ❌ BUILD FAILED #${BUILD_NUMBER}
                     
-                    📦 Project: Ecommerce Fullstack
+                    📦 Project: Buy-01 Jenkins
                     🌿 Branch: ${env.GIT_BRANCH}
                     ⏱️ Duration: ${buildDuration}
                     🚀 Environment: ${params.ENVIRONMENT}
