@@ -213,36 +213,45 @@ describe('ProductService - Real Tests', () => {
   });
 
   it('should include user headers when user is authenticated', (done) => {
-    // Arrange - ensure mock returns user
-    authService.getCurrentUser.and.returnValue(mockUser);
-
-    // Act
-    service.getAllProducts().subscribe(() => {
-      // Assert that getCurrentUser was called
-      expect(authService.getCurrentUser).toHaveBeenCalled();
+    // Act - Use deleteProduct which actually includes headers
+    service.deleteProduct('product123').subscribe(() => {
       done();
     });
 
     // Assert
-    const req = httpMock.expectOne('/api/products');
+    const req = httpMock.expectOne('/api/products/product123');
+    expect(req.request.method).toBe('DELETE');
     expect(req.request.headers.has('X-User-Email')).toBe(true);
     expect(req.request.headers.has('X-User-Id')).toBe(true);
-    req.flush([]);
+    expect(req.request.headers.get('X-User-Email')).toBe('seller@example.com');
+    expect(req.request.headers.get('X-User-Id')).toBe('seller123');
+    req.flush(null);
   });
 
   it('should handle requests when user is not authenticated', (done) => {
     // Arrange
     authService.getCurrentUser.and.returnValue(null);
 
-    // Act
-    service.getAllProducts().subscribe(() => {
+    // Act - Use createProduct which uses getHeaders()
+    const productRequest: ProductRequest = {
+      name: 'Test',
+      description: 'Test',
+      price: 10,
+      stock: 5,
+      category: 'Test',
+      sellerName: 'Test',
+      sellerAvatar: '',
+      imageIds: []
+    };
+
+    service.createProduct(productRequest).subscribe(() => {
       done();
     });
 
-    // Assert
+    // Assert - Headers should not be present when user is null
     const req = httpMock.expectOne('/api/products');
     expect(req.request.headers.has('X-User-Email')).toBe(false);
     expect(req.request.headers.has('X-User-Id')).toBe(false);
-    req.flush([]);
+    req.flush({} as Product);
   });
 })
