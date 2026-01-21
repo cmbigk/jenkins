@@ -15,8 +15,4 @@ export class AppComponent {
     private router: Router
   ) {}
 
-  logout(): void {
-   
-    this.router.navigate(['/login']);
-  }
 }
